@@ -1,5 +1,5 @@
-from .database import engine, Base
-from .models import Client, Production, Invoice
+from database import engine, Base
+from models import Client, Production, Invoice
 
 def init_db():
     try:

@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from . import models, schemas
+import models, schemas
 
 
 def create_client_production(db: Session, production: schemas.ProductionCreate, client_id: int):
