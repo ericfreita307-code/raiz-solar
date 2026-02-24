@@ -9,7 +9,8 @@ import {
     AlertCircle,
     Download,
     QrCode,
-    Save
+    Save,
+    X
 } from 'lucide-react';
 import {
     BarChart,
@@ -28,6 +29,9 @@ const ClientPortal = () => {
     const [loading, setLoading] = useState(true);
     const [activeSection, setActiveSection] = useState('dashboard'); // dashboard, history, profile
     const [user, setUser] = useState(null);
+    const [showPixModal, setShowPixModal] = useState(false);
+    const [pixData, setPixData] = useState(null);
+    const [generatingPix, setGeneratingPix] = useState(false);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -49,6 +53,25 @@ const ClientPortal = () => {
             console.error("Error fetching client data", error);
             setLoading(false);
         }
+    };
+
+    const handleGeneratePix = async (invoiceId) => {
+        setGeneratingPix(true);
+        try {
+            const response = await api.get(`/invoices/${invoiceId}/pix`);
+            setPixData(response.data);
+            setShowPixModal(true);
+        } catch (error) {
+            console.error("Error generating pix", error);
+            alert(error.response?.data?.detail || "Erro ao gerar cobrança Pix. Verifique se a usina tem chave Pix cadastrada.");
+        } finally {
+            setGeneratingPix(false);
+        }
+    };
+
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        alert("Código Pix copiado!");
     };
 
     const handleLogout = () => {
@@ -149,7 +172,12 @@ const ClientPortal = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                         {/* Latest Invoice */}
                         <div className="lg:col-span-5">
-                            <InvoiceCard latestInvoice={latestInvoice} client={client} />
+                            <InvoiceCard
+                                latestInvoice={latestInvoice}
+                                client={client}
+                                onGeneratePix={handleGeneratePix}
+                                generatingPix={generatingPix}
+                            />
                         </div>
 
                         {/* Chart Preview */}
@@ -181,6 +209,46 @@ const ClientPortal = () => {
                 {activeSection === 'profile' && (
                     <ProfileSection client={client} onUpdate={() => fetchClientData(user.user_id)} />
                 )}
+
+                {/* Pix Modal */}
+                {showPixModal && pixData && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                        <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
+                            <div className="bg-yellow-500 p-8 text-center text-[#1e293b]">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-xl font-black uppercase tracking-tighter">Pagamento Pix</h3>
+                                    <button onClick={() => setShowPixModal(false)} className="bg-black/10 p-2 rounded-full hover:bg-black/20 transition-all">
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <p className="text-xs font-bold uppercase tracking-widest opacity-80">Escaneie o QR Code abaixo</p>
+                            </div>
+                            <div className="p-8 flex flex-col items-center">
+                                <div className="bg-white p-4 rounded-3xl border-2 border-gray-50 shadow-inner mb-6">
+                                    <img
+                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixData.pix_payload)}`}
+                                        alt="Pix QR Code"
+                                        className="w-48 h-48"
+                                    />
+                                </div>
+
+                                <div className="w-full space-y-4">
+                                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Chave Pix</p>
+                                        <p className="text-sm font-black text-[#1e293b]">{pixData.pix_key}</p>
+                                    </div>
+
+                                    <button
+                                        onClick={() => copyToClipboard(pixData.pix_payload)}
+                                        className="w-full bg-[#1e293b] text-white py-4 rounded-2xl font-black hover:bg-black transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
+                                    >
+                                        <Save size={16} /> Copiar Chave Pix
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );
@@ -200,7 +268,7 @@ const ServiceIcon = ({ icon, label, active, onClick }) => (
     </button>
 );
 
-const InvoiceCard = ({ latestInvoice, client }) => {
+const InvoiceCard = ({ latestInvoice, client, onGeneratePix, generatingPix }) => {
     if (!latestInvoice) return (
         <div className="bg-white rounded-[2rem] p-10 shadow-sm border border-gray-100 text-center flex flex-col items-center justify-center min-h-[400px]">
             <FileText className="w-16 h-16 text-gray-200 mb-4" />
@@ -256,10 +324,11 @@ const InvoiceCard = ({ latestInvoice, client }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {!isPaid && (
                         <button
-                            onClick={() => alert('Sistema de Pix em manutenção. Por favor, tente novamente mais tarde.')}
-                            className="flex items-center justify-center gap-2 bg-yellow-500 text-[#1e293b] py-4 rounded-2xl font-black hover:bg-yellow-400 transition shadow-lg shadow-yellow-100 uppercase tracking-widest text-xs"
+                            onClick={() => onGeneratePix(latestInvoice.id)}
+                            disabled={generatingPix}
+                            className="flex items-center justify-center gap-2 bg-yellow-500 text-[#1e293b] py-4 rounded-2xl font-black hover:bg-yellow-400 transition shadow-lg shadow-yellow-100 uppercase tracking-widest text-xs disabled:opacity-50"
                         >
-                            <QrCode size={18} /> Gerar Pix
+                            <QrCode size={18} /> {generatingPix ? 'Gerando...' : 'Gerar Pix'}
                         </button>
                     )}
                     <button

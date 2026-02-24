@@ -428,3 +428,29 @@ def delete_operator(db: Session, operator_id: int):
         db.commit()
         return True
     return False
+
+def get_invoice_pix_payload(db: Session, invoice_id: int):
+    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+    if not invoice:
+        return None
+    
+    # Get the client's plant
+    distribution = db.query(models.PlantDistribution).filter(models.PlantDistribution.client_id == invoice.client_id).first()
+    if not distribution:
+        return {"error": "Sem planta vinculada"}
+        
+    plant = db.query(models.GenerationPlant).filter(models.GenerationPlant.id == distribution.plant_id).first()
+    if not plant or not plant.pix_key:
+        return {"error": "Planta sem chave Pix cadastrada"}
+    
+    try:
+        from pixqrcodegen import Payload
+        # Payload(nome, chave, valor, cidade, txtId)
+        # Note: We use a simplified amount formatting and arbitrary city if not available
+        amount = f"{invoice.amount_to_collect:.2f}"
+        # Brazilian Pix standard requires city (max 15 chars) and name (max 25 chars)
+        recipient_name = (plant.name[:25]) if plant.name else "RAIZ SOLAR"
+        payload = Payload(recipient_name, plant.pix_key, amount, "MACAPA", f"FAT{invoice.id}")
+        return {"pix_payload": payload.gerarPayload(), "pix_key": plant.pix_key}
+    except Exception as e:
+        return {"error": f"Erro ao gerar Pix: {str(e)}"}

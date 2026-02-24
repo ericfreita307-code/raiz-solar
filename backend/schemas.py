@@ -13,6 +13,7 @@ class GenerationPlantPlain(BaseModel):
     acquisition_cost: float
     maintenance_cost: float
     is_active: bool
+    pix_key: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -100,6 +101,7 @@ class GenerationPlantCreate(BaseModel):
     acquisition_cost: float
     maintenance_cost: float
     is_active: bool = True
+    pix_key: Optional[str] = None
 
 class GenerationPlantUpdate(BaseModel):
     name: Optional[str] = None
@@ -109,6 +111,7 @@ class GenerationPlantUpdate(BaseModel):
     acquisition_cost: Optional[float] = None
     maintenance_cost: Optional[float] = None
     is_active: Optional[bool] = None
+    pix_key: Optional[str] = None
 
 class PlantDistributionCreate(BaseModel):
     plant_id: int

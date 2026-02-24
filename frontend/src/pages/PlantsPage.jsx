@@ -32,7 +32,8 @@ const PlantsPage = () => {
         capacity_kw: '',
         acquisition_cost: '',
         maintenance_cost: '',
-        is_active: true
+        is_active: true,
+        pix_key: ''
     });
 
     const [prodData, setProdData] = useState({
@@ -170,7 +171,7 @@ const PlantsPage = () => {
     };
 
     const resetForms = () => {
-        setFormData({ name: '', address: '', uc_number: '', capacity_kw: '', acquisition_cost: '', maintenance_cost: '', is_active: true });
+        setFormData({ name: '', address: '', uc_number: '', capacity_kw: '', acquisition_cost: '', maintenance_cost: '', is_active: true, pix_key: '' });
         setActivePlant(null);
     };
 
@@ -412,6 +413,15 @@ const PlantsPage = () => {
                                         placeholder="Rua, Número, Bairro, Cidade..."
                                         value={formData.address}
                                         onChange={e => setFormData({ ...formData, address: e.target.value })}
+                                    />
+                                </div>
+                                <div className="md:col-span-2 space-y-3 group">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] group-focus-within:text-yellow-600 transition-colors font-montserrat text-blue-600">Chave Pix para Recebimento</label>
+                                    <input
+                                        className="w-full border-b-4 border-gray-100 focus:border-blue-400 py-4 outline-none transition-all font-black text-2xl text-[#1e293b] placeholder:text-gray-100 placeholder:font-normal"
+                                        placeholder="CPF, CNPJ, E-mail ou Chave Aleatória..."
+                                        value={formData.pix_key || ''}
+                                        onChange={e => setFormData({ ...formData, pix_key: e.target.value })}
                                     />
                                 </div>
                                 <div className="space-y-3 group">

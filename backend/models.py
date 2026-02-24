@@ -14,6 +14,7 @@ class GenerationPlant(Base):
     acquisition_cost = Column(Float, default=0.0)
     maintenance_cost = Column(Float, default=0.0)
     is_active = Column(Boolean, default=True)
+    pix_key = Column(String, nullable=True)
     
     productions = relationship("Production", back_populates="plant")
     distributions = relationship("PlantDistribution", back_populates="plant")

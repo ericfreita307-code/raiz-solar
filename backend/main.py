@@ -244,6 +244,15 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Invoice not found")
     return {"detail": "Invoice deleted"}
 
+@app.get("/invoices/{invoice_id}/pix")
+def read_invoice_pix(invoice_id: int, db: Session = Depends(get_db)):
+    pix_data = crud.get_invoice_pix_payload(db, invoice_id=invoice_id)
+    if pix_data is None:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if "error" in pix_data:
+        raise HTTPException(status_code=400, detail=pix_data["error"])
+    return pix_data
+
 @app.post("/invoices/{invoice_id}/upload-equatorial")
 async def upload_equatorial_invoice(
     invoice_id: int,
