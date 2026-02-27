@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List
 import os
 import shutil
@@ -24,7 +25,7 @@ app = FastAPI(title="Solar Admin API")
 def health_check(db: Session = Depends(get_db)):
     try:
         # Check database connection
-        db.execute(models.sqlalchemy.text("SELECT 1"))
+        db.execute(text("SELECT 1"))
         # Check if tables exist by counting plants
         plants_count = db.query(models.GenerationPlant).count()
         return {
