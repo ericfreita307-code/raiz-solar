@@ -240,9 +240,9 @@ const ClientPortal = () => {
 
                                     <button
                                         onClick={() => copyToClipboard(pixData.pix_payload)}
-                                        className="w-full bg-[#1e293b] text-white py-4 rounded-2xl font-black hover:bg-black transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
+                                        className="w-full bg-[#1e293b] text-white py-5 rounded-2xl font-black hover:bg-black transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-xs shadow-xl active:scale-95"
                                     >
-                                        <Save size={16} /> Copiar Chave Pix
+                                        <QrCode size={18} className="text-yellow-500" /> Copiar Código Pix
                                     </button>
                                 </div>
                             </div>
@@ -303,11 +303,23 @@ const InvoiceCard = ({ latestInvoice, client, onGeneratePix, generatingPix }) =>
                     </div>
                 </div>
 
-                <div className="mb-10 text-center py-8 rounded-3xl bg-gray-50 border border-gray-100">
-                    <p className="text-sm font-black text-gray-400 uppercase tracking-widest mb-2">Total a pagar</p>
-                    <p className="text-5xl font-black text-[#1e293b] tracking-tighter">
-                        R$ {latestInvoice.amount_to_collect.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <div className="mb-8 text-center py-10 rounded-[2.5rem] bg-[#f8fafc] border-2 border-dashed border-gray-100 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <QrCode size={80} />
+                    </div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Total com Desconto</p>
+                    <p className="text-6xl font-black text-[#1e293b] tracking-tighter mb-4">
+                        <span className="text-2xl mr-1">R$</span>
+                        {latestInvoice.amount_to_collect.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
+                    {latestInvoice.value_without_discount > 0 && (
+                        <div className="inline-flex flex-col items-center">
+                            <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest leading-none mb-1">Valor Sem Desconto</span>
+                            <span className="text-base font-bold text-gray-400 line-through decoration-red-400/30 decoration-2">
+                                R$ {latestInvoice.value_without_discount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-6 mb-10">
