@@ -20,6 +20,14 @@ except Exception as e:
 
 app = FastAPI(title="Solar Admin API")
 
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 # --- Health Check ---
 @app.get("/health/")
 def health_check(db: Session = Depends(get_db)):
@@ -59,14 +67,6 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Mount static files for serving uploaded PDFs
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-
-# Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 # --- Authentication ---
 @app.post("/login", response_model=schemas.LoginResponse)
