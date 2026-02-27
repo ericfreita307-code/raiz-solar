@@ -10,10 +10,35 @@ from pathlib import Path
 import crud, models, schemas
 from database import SessionLocal, engine
 
-# Create tables
-models.Base.metadata.create_all(bind=engine)
+# Create tables logic with more robustness
+try:
+    models.Base.metadata.create_all(bind=engine)
+    print("Database tables created/verified successfully.")
+except Exception as e:
+    print(f"CRITICAL ERROR during table creation: {str(e)}")
 
 app = FastAPI(title="Solar Admin API")
+
+# --- Health Check ---
+@app.get("/health/")
+def health_check(db: Session = Depends(get_db)):
+    try:
+        # Check database connection
+        db.execute(models.sqlalchemy.text("SELECT 1"))
+        # Check if tables exist by counting plants
+        plants_count = db.query(models.GenerationPlant).count()
+        return {
+            "status": "online",
+            "database": "connected",
+            "plants_found": plants_count,
+            "engine": str(engine.url.drivername)
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "database": "disconnected",
+            "detail": str(e)
+        }
 
 app.add_middleware(
     CORSMiddleware,
@@ -85,7 +110,14 @@ def login(request: schemas.LoginRequest, db: Session = Depends(get_db)):
 # --- Generation Plants ---
 @app.post("/plants/", response_model=schemas.GenerationPlant)
 def create_plant(plant: schemas.GenerationPlantCreate, db: Session = Depends(get_db)):
-    return crud.create_generation_plant(db=db, plant=plant)
+    try:
+        return crud.create_generation_plant(db=db, plant=plant)
+    except Exception as e:
+        print(f"Error creating plant: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Erro interno ao criar usina: {str(e)}"
+        )
 
 @app.get("/plants/", response_model=List[schemas.GenerationPlant])
 def read_plants(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
