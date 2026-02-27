@@ -1,5 +1,64 @@
 from sqlalchemy.orm import Session
 import models, schemas
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _generate_pix_brcode(name: str, key: str, amount: float, city: str = "BRASILIA", txid: str = "***") -> str:
+    """
+    Gera o payload PIX seguindo o padrão BR Code (EMV QRCPS-MPM).
+    Tags obrigatórias: 00, 01, 26 (com Chave PIX), 52, 53, 54, 58, 59, 60, 62, 63 (CRC).
+    """
+    def field(tag: str, value: str) -> str:
+        return f"{tag}{len(value):02d}{value}"
+
+    # Tag 26 - Merchant Account Info (GUI + Chave PIX)
+    gui = field("00", "BR.GOV.BCB.PIX")
+    pix_key_field = field("01", key.strip())
+    merchant_account = field("26", gui + pix_key_field)
+
+    # Tag 54 - Valor (obrigatório para QR dinâmico reconhecido)
+    amount_str = f"{float(amount):.2f}"
+
+    # Limpeza de nome e cidade
+    clean_name = (name.strip()[:25]).upper()
+    clean_city = (city.strip()[:15]).upper()
+    clean_txid = (txid.strip()[:25])
+
+    # Tag 62 - Additional Data (txid)
+    reference_label = field("05", clean_txid)
+    additional = field("62", reference_label)
+
+    # Montar payload sem CRC
+    payload = (
+        field("00", "01")        +  # Payload Format Indicator
+        field("01", "12")        +  # Point of Initiation (12 = com valor)
+        merchant_account         +  # Tag 26
+        field("52", "0000")      +  # MCC
+        field("53", "986")       +  # Currency BRL
+        field("54", amount_str)  +  # Valor
+        field("58", "BR")        +  # Country Code
+        field("59", clean_name)  +  # Nome do Recebedor
+        field("60", clean_city)  +  # Cidade
+        additional                  # Tag 62
+    )
+
+    # Tag 63 - CRC16 CCITT (polinomio 0x1021, valor inicial 0xFFFF)
+    payload_for_crc = payload + "6304"
+    crc = 0xFFFF
+    for char in payload_for_crc:
+        crc ^= ord(char) << 8
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = (crc << 1) ^ 0x1021
+            else:
+                crc <<= 1
+            crc &= 0xFFFF
+
+    final_payload = payload_for_crc + format(crc, "04X").upper()
+    logger.info(f"[PIX BR Code] Generated payload ({len(final_payload)} chars): {final_payload[:60]}...")
+    return final_payload
 
 
 def create_client_production(db: Session, production: schemas.ProductionCreate, client_id: int):
@@ -432,25 +491,58 @@ def delete_operator(db: Session, operator_id: int):
 def get_invoice_pix_payload(db: Session, invoice_id: int):
     invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
     if not invoice:
+        logger.warning(f"[PIX] Invoice {invoice_id} not found")
         return None
     
-    # Get the client's plant
-    distribution = db.query(models.PlantDistribution).filter(models.PlantDistribution.client_id == invoice.client_id).first()
-    if not distribution:
-        return {"error": "Sem planta vinculada"}
-        
-    plant = db.query(models.GenerationPlant).filter(models.GenerationPlant.id == distribution.plant_id).first()
-    if not plant or not plant.pix_key:
-        return {"error": "Planta sem chave Pix cadastrada"}
+    # Get the client's plant via distribution
+    distribution = db.query(models.PlantDistribution).filter(
+        models.PlantDistribution.client_id == invoice.client_id
+    ).first()
     
+    if not distribution:
+        logger.warning(f"[PIX] No plant distribution found for client {invoice.client_id}")
+        return {"error": "Cliente sem usina vinculada. Verifique o rateio na usina."}
+        
+    plant = db.query(models.GenerationPlant).filter(
+        models.GenerationPlant.id == distribution.plant_id
+    ).first()
+    
+    if not plant:
+        logger.warning(f"[PIX] Plant {distribution.plant_id} not found")
+        return {"error": "Usina não encontrada."}
+        
+    if not plant.pix_key or plant.pix_key.strip() == '':
+        logger.warning(f"[PIX] Plant {plant.id} has no pix_key")
+        return {"error": "Usina sem Chave PIX cadastrada. Edite a usina e adicione a chave."}
+    
+    # Validate invoice amount
+    amount = invoice.amount_to_collect
+    if not amount or amount <= 0:
+        logger.warning(f"[PIX] Invoice {invoice_id} has invalid amount: {amount}")
+        return {"error": "Fatura com valor inválido (R$ 0,00)."}
+
     try:
-        from pixqrcodegen import Payload
-        # Payload(nome, chave, valor, cidade, txtId)
-        # Note: We use a simplified amount formatting and arbitrary city if not available
-        amount = f"{invoice.amount_to_collect:.2f}"
-        # Brazilian Pix standard requires city (max 15 chars) and name (max 25 chars)
-        recipient_name = (plant.name[:25]) if plant.name else "RAIZ SOLAR"
-        payload = Payload(recipient_name, plant.pix_key, amount, "MACAPA", f"FAT{invoice.id}")
-        return {"pix_payload": payload.gerarPayload(), "pix_key": plant.pix_key}
+        # Generate PIX BR Code (EMV QRCPS-MPM) natively
+        recipient_name = (plant.name or "RAIZ SOLAR")
+        pix_city = "MACAPA"
+        txid = f"FAT{invoice.id:010d}"
+        
+        logger.info(f"[PIX] Generating for invoice={invoice_id}, key={plant.pix_key}, amount={amount:.2f}")
+        
+        payload_str = _generate_pix_brcode(
+            name=recipient_name,
+            key=plant.pix_key,
+            amount=amount,
+            city=pix_city,
+            txid=txid
+        )
+        
+        return {
+            "pix_payload": payload_str,
+            "pix_key": plant.pix_key,
+            "amount": round(amount, 2),
+            "recipient": recipient_name[:25]
+        }
     except Exception as e:
-        return {"error": f"Erro ao gerar Pix: {str(e)}"}
+        logger.error(f"[PIX] Error generating payload: {type(e).__name__}: {str(e)}", exc_info=True)
+        return {"error": f"Erro interno ao gerar PIX: {str(e)}"}

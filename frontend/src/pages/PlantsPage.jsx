@@ -33,7 +33,8 @@ const PlantsPage = () => {
         acquisition_cost: '',
         maintenance_cost: '',
         is_active: true,
-        pix_key: ''
+        pix_key: '',
+        pix_key_type: 'cpf'
     });
 
     const [prodData, setProdData] = useState({
@@ -171,7 +172,7 @@ const PlantsPage = () => {
     };
 
     const resetForms = () => {
-        setFormData({ name: '', address: '', uc_number: '', capacity_kw: '', acquisition_cost: '', maintenance_cost: '', is_active: true, pix_key: '' });
+        setFormData({ name: '', address: '', uc_number: '', capacity_kw: '', acquisition_cost: '', maintenance_cost: '', is_active: true, pix_key: '', pix_key_type: 'cpf' });
         setActivePlant(null);
     };
 
@@ -417,12 +418,31 @@ const PlantsPage = () => {
                                 </div>
                                 <div className="md:col-span-2 space-y-3 group">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] group-focus-within:text-yellow-600 transition-colors font-montserrat text-blue-600">Chave Pix para Recebimento</label>
-                                    <input
-                                        className="w-full border-b-4 border-gray-100 focus:border-blue-400 py-4 outline-none transition-all font-black text-2xl text-[#1e293b] placeholder:text-gray-100 placeholder:font-normal"
-                                        placeholder="CPF, CNPJ, E-mail ou Chave Aleatória..."
-                                        value={formData.pix_key || ''}
-                                        onChange={e => setFormData({ ...formData, pix_key: e.target.value })}
-                                    />
+                                    <div className="flex gap-3">
+                                        <div className="relative">
+                                            <select
+                                                value={formData.pix_key_type || 'cpf'}
+                                                onChange={e => setFormData({ ...formData, pix_key_type: e.target.value, pix_key: '' })}
+                                                className="h-full border-b-4 border-gray-100 focus:border-yellow-400 py-4 outline-none transition-all font-black text-base text-[#1e293b] bg-transparent pr-2 cursor-pointer appearance-none w-36 text-xs uppercase tracking-wider"
+                                            >
+                                                <option value="cpf">CPF/CNPJ</option>
+                                                <option value="email">E-mail</option>
+                                                <option value="phone">Telefone</option>
+                                                <option value="random">Aleatória</option>
+                                            </select>
+                                        </div>
+                                        <input
+                                            className="flex-1 border-b-4 border-gray-100 focus:border-blue-400 py-4 outline-none transition-all font-black text-xl text-[#1e293b] placeholder:text-gray-200 placeholder:font-normal"
+                                            placeholder={
+                                                formData.pix_key_type === 'cpf' ? '000.000.000-00 ou 00.000.000/0001-00' :
+                                                    formData.pix_key_type === 'email' ? 'exemplo@email.com' :
+                                                        formData.pix_key_type === 'phone' ? '+55 (00) 00000-0000' :
+                                                            'Chave aleatória (UUID)'
+                                            }
+                                            value={formData.pix_key || ''}
+                                            onChange={e => setFormData({ ...formData, pix_key: e.target.value })}
+                                        />
+                                    </div>
                                 </div>
                                 <div className="space-y-3 group">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] group-focus-within:text-yellow-600 transition-colors font-montserrat">Capacidade (kW)</label>

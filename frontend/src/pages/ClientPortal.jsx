@@ -10,7 +10,10 @@ import {
     Download,
     QrCode,
     Save,
-    X
+    X,
+    Check,
+    Copy,
+    Clipboard
 } from 'lucide-react';
 import {
     BarChart,
@@ -32,6 +35,7 @@ const ClientPortal = () => {
     const [showPixModal, setShowPixModal] = useState(false);
     const [pixData, setPixData] = useState(null);
     const [generatingPix, setGeneratingPix] = useState(false);
+    const [pixCopied, setPixCopied] = useState(false);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -59,19 +63,35 @@ const ClientPortal = () => {
         setGeneratingPix(true);
         try {
             const response = await api.get(`/invoices/${invoiceId}/pix`);
-            setPixData(response.data);
+            const data = response.data;
+
+            // Debug: validate received data
+            console.log('[PIX] Data received from backend:', data);
+            console.log('[PIX] pix_payload:', data.pix_payload);
+            console.log('[PIX] pix_key:', data.pix_key);
+            console.log('[PIX] amount:', data.amount);
+
+            if (!data.pix_payload) {
+                console.error('[PIX] pix_payload is empty or null!');
+                throw new Error('Payload PIX vazio retornado pelo servidor.');
+            }
+
+            setPixData(data);
             setShowPixModal(true);
         } catch (error) {
-            console.error("Error generating pix", error);
-            alert(error.response?.data?.detail || "Erro ao gerar cobrança Pix. Verifique se a usina tem chave Pix cadastrada.");
+            console.error('[PIX] Error:', error);
+            const detail = error.response?.data?.detail || error.message || 'Erro desconhecido';
+            alert(`Erro ao gerar PIX: ${detail}`);
         } finally {
             setGeneratingPix(false);
         }
     };
 
     const copyToClipboard = (text) => {
-        navigator.clipboard.writeText(text);
-        alert("Código Pix copiado!");
+        navigator.clipboard.writeText(text).then(() => {
+            setPixCopied(true);
+            setTimeout(() => setPixCopied(false), 3000);
+        });
     };
 
     const handleLogout = () => {
@@ -212,39 +232,76 @@ const ClientPortal = () => {
 
                 {/* Pix Modal */}
                 {showPixModal && pixData && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
                         <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
-                            <div className="bg-yellow-500 p-8 text-center text-[#1e293b]">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-xl font-black uppercase tracking-tighter">Pagamento Pix</h3>
-                                    <button onClick={() => setShowPixModal(false)} className="bg-black/10 p-2 rounded-full hover:bg-black/20 transition-all">
-                                        <X size={20} />
-                                    </button>
+
+                            {/* Modal Header */}
+                            <div className="bg-[#f59e0b] p-7 flex justify-between items-center">
+                                <div>
+                                    <h3 className="text-2xl font-black text-[#1e293b] uppercase tracking-tighter">Pagamento Pix</h3>
+                                    <p className="text-[11px] font-bold text-[#78350f] uppercase tracking-[0.2em] mt-1 opacity-80">Escaneie o QR Code abaixo</p>
                                 </div>
-                                <p className="text-xs font-bold uppercase tracking-widest opacity-80">Escaneie o QR Code abaixo</p>
+                                <button
+                                    onClick={() => { setShowPixModal(false); setPixCopied(false); }}
+                                    className="bg-[#1e293b] text-white p-2.5 rounded-2xl hover:bg-black transition-all shadow-xl"
+                                >
+                                    <X size={20} />
+                                </button>
                             </div>
-                            <div className="p-8 flex flex-col items-center">
-                                <div className="bg-white p-4 rounded-3xl border-2 border-gray-50 shadow-inner mb-6">
+
+                            {/* QR Code */}
+                            <div className="px-8 pt-8 pb-4 flex flex-col items-center">
+
+                                {/* Amount badge */}
+                                {pixData.amount > 0 && (
+                                    <div className="mb-4 bg-yellow-50 border-2 border-yellow-200 rounded-2xl px-6 py-3 w-full text-center">
+                                        <p className="text-[9px] font-black text-yellow-700 uppercase tracking-widest mb-1">Valor a Pagar</p>
+                                        <p className="text-2xl font-black text-[#1e293b]">
+                                            R$ {pixData.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div className="bg-white rounded-3xl border-4 border-gray-100 shadow-inner p-4 mb-5 w-full flex items-center justify-center">
                                     <img
-                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixData.pix_payload)}`}
+                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data=${encodeURIComponent(pixData.pix_payload)}`}
                                         alt="Pix QR Code"
-                                        className="w-48 h-48"
+                                        className="w-56 h-56 rounded-xl"
+                                        onError={(e) => { e.target.src = `https://chart.googleapis.com/chart?cht=qr&chs=240x240&chl=${encodeURIComponent(pixData.pix_payload)}`; }}
                                     />
                                 </div>
 
-                                <div className="w-full space-y-4">
-                                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Chave Pix</p>
-                                        <p className="text-sm font-black text-[#1e293b]">{pixData.pix_key}</p>
+                                {/* PIX Key read-only */}
+                                <div className="w-full mb-3">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.25em] mb-1.5">Chave Pix</p>
+                                    <div className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-5 py-3.5 font-bold text-[#1e293b] text-sm select-all cursor-text">
+                                        {pixData.pix_key}
                                     </div>
-
-                                    <button
-                                        onClick={() => copyToClipboard(pixData.pix_payload)}
-                                        className="w-full bg-[#1e293b] text-white py-5 rounded-2xl font-black hover:bg-black transition-all flex items-center justify-center gap-3 uppercase tracking-widest text-xs shadow-xl active:scale-95"
-                                    >
-                                        <QrCode size={18} className="text-yellow-500" /> Copiar Código Pix
-                                    </button>
                                 </div>
+
+                                {/* PIX Copia e Cola read-only */}
+                                <div className="w-full mb-5">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.25em] mb-1.5">Pix Copia e Cola</p>
+                                    <div className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-mono text-[11px] text-gray-500 break-all select-all cursor-text max-h-20 overflow-y-auto leading-relaxed">
+                                        {pixData.pix_payload || <span className="text-red-400 italic">Erro: payload vazio</span>}
+                                    </div>
+                                </div>
+
+                                {/* Copy Button with visual feedback */}
+                                <button
+                                    onClick={() => copyToClipboard(pixData.pix_payload)}
+                                    disabled={!pixData.pix_payload}
+                                    className={`w-full py-5 rounded-2xl font-black transition-all duration-300 flex items-center justify-center gap-3 uppercase tracking-widest text-xs shadow-xl active:scale-95 mb-6 ${pixCopied
+                                            ? 'bg-green-600 text-white shadow-green-200'
+                                            : 'bg-[#1e293b] text-white hover:bg-black disabled:opacity-50'
+                                        }`}
+                                >
+                                    {pixCopied ? (
+                                        <><Check size={18} className="text-green-300" /> Copiado com Sucesso!</>
+                                    ) : (
+                                        <><QrCode size={18} className="text-yellow-500" /> Copiar Código Pix</>
+                                    )}
+                                </button>
                             </div>
                         </div>
                     </div>
