@@ -29,7 +29,7 @@ def _generate_pix_brcode(name: str, key: str, amount: float, city: str = "BRASIL
         return f"{tag}{len(value):02d}{value}"
 
     # Tag 26 - Merchant Account Info (GUI + Chave PIX)
-    gui = field("00", "BR.GOV.BCB.PIX")
+    gui = field("00", "br.gov.bcb.pix")
     pix_key_field = field("01", key.strip())
     merchant_account = field("26", gui + pix_key_field)
 
@@ -48,7 +48,7 @@ def _generate_pix_brcode(name: str, key: str, amount: float, city: str = "BRASIL
     # Montar payload sem CRC
     payload = (
         field("00", "01")        +  # Payload Format Indicator
-        field("01", "11")        +  # Point of Initiation (11 = Estático, valor fixo)
+        # Tag 01 removida por compatibilidade (opcional em Pix Estático)
         merchant_account         +  # Tag 26
         field("52", "0000")      +  # MCC
         field("53", "986")       +  # Currency BRL
