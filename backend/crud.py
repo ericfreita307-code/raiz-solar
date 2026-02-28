@@ -5,6 +5,21 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _normalize_text(text: str) -> str:
+    """Remove acentuação e caracteres especiais para compatibilidade com o padrão EMV."""
+    import unicodedata
+    import re
+    if not text:
+        return ""
+    # Normaliza para decompor caracteres acentuados (ex: 'á' vira 'a' + '´')
+    normalized = unicodedata.normalize('NFD', text)
+    # Mantém apenas caracteres ASCII básicos
+    ascii_only = normalized.encode('ascii', 'ignore').decode('ascii')
+    # Remove qualquer caractere que não seja letra, número ou espaço e limpa espaços extras
+    clean = re.sub(r'[^a-zA-Z0-9\s]', '', ascii_only)
+    return " ".join(clean.split()).upper()
+
+
 def _generate_pix_brcode(name: str, key: str, amount: float, city: str = "BRASILIA", txid: str = "***") -> str:
     """
     Gera o payload PIX seguindo o padrão BR Code (EMV QRCPS-MPM).
@@ -18,13 +33,13 @@ def _generate_pix_brcode(name: str, key: str, amount: float, city: str = "BRASIL
     pix_key_field = field("01", key.strip())
     merchant_account = field("26", gui + pix_key_field)
 
-    # Tag 54 - Valor (obrigatório para QR dinâmico reconhecido)
+    # Tag 54 - Valor (obrigatório se Point of Initiation for 11/12 e valor fixo)
     amount_str = f"{float(amount):.2f}"
 
-    # Limpeza de nome e cidade
-    clean_name = (name.strip()[:25]).upper()
-    clean_city = (city.strip()[:15]).upper()
-    clean_txid = (txid.strip()[:25])
+    # Limpeza de nome e cidade (Normalização rigorosa)
+    clean_name = _normalize_text(name)[:25]
+    clean_city = _normalize_text(city)[:15]
+    clean_txid = "***"  # Forçar txid nulo para máxima compatibilidade em Pix Estático
 
     # Tag 62 - Additional Data (txid)
     reference_label = field("05", clean_txid)
@@ -33,7 +48,7 @@ def _generate_pix_brcode(name: str, key: str, amount: float, city: str = "BRASIL
     # Montar payload sem CRC
     payload = (
         field("00", "01")        +  # Payload Format Indicator
-        field("01", "12")        +  # Point of Initiation (12 = com valor)
+        field("01", "11")        +  # Point of Initiation (11 = Estático, valor fixo)
         merchant_account         +  # Tag 26
         field("52", "0000")      +  # MCC
         field("53", "986")       +  # Currency BRL
