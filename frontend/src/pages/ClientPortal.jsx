@@ -127,21 +127,28 @@ const ClientPortal = () => {
     const invoices = [...client.invoices].sort((a, b) => b.month.localeCompare(a.month));
     const latestInvoice = invoices[0] || null;
 
-    // Prepare chart data
-    const chartData = [...invoices].reverse().slice(-6).map(inv => ({
-        month: inv.month,
-        value: inv.consumption_kwh,
-        cost: inv.total_invoiced
-    }));
+    // Prepare chart data (Last 6 months economy)
+    const chartData = [...invoices].reverse().slice(-6).map(inv => {
+        const economy = (inv.value_without_discount || 0) - (inv.amount_to_collect || 0);
+        return {
+            month: inv.month,
+            value: economy > 0 ? economy : 0, // Focus on economy/savings
+            consumption: inv.consumption_kwh,
+            cost: inv.amount_to_collect
+        };
+    });
+
+    const totalAccumulatedSavings = invoices.reduce((acc, inv) => {
+        const economy = (inv.value_without_discount || 0) - (inv.amount_to_collect || 0);
+        return acc + (economy > 0 ? economy : 0);
+    }, 0);
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] font-sans pb-12 text-[#1e293b]">
             {/* Header / Nav */}
             <header className="bg-white shadow-sm border-b border-gray-100 py-4 px-6 md:px-12 flex justify-between items-center sticky top-0 z-50">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#1e293b] rounded-xl flex items-center justify-center text-yellow-500 font-black text-xl shadow-lg shadow-gray-200">
-                        RS
-                    </div>
+                    <img src="/logo-raiz-solar.png" alt="Raiz Solar Logo" className="w-10 h-10 object-contain" />
                     <div>
                         <h1 className="text-lg font-black text-[#1e293b] tracking-tight leading-none uppercase">Raiz Solar</h1>
                         <p className="text-[10px] text-yellow-600 font-bold uppercase tracking-widest mt-1">Portal do Cliente</p>
@@ -152,6 +159,7 @@ const ClientPortal = () => {
                     <div className="hidden md:block text-right">
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Bem-vindo,</p>
                         <p className="text-sm font-black text-[#1e293b]">{client.name}</p>
+                        <p className="text-[8px] text-gray-300 font-bold uppercase mt-1">v1.0.8 - {new Date().toLocaleTimeString()}</p>
                     </div>
                     <button
                         onClick={handleLogout}
@@ -165,8 +173,8 @@ const ClientPortal = () => {
             <main className="max-w-7xl mx-auto px-4 md:px-8 mt-8">
                 {/* Services Grid */}
                 <section className="mb-10">
-                    <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Serviços Disponíveis</h2>
-                    <div className="flex flex-wrap gap-4">
+                    <h2 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-5">Serviços Disponíveis</h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         <ServiceIcon
                             icon={<FileText />}
                             label="Faturas e 2ª via"
@@ -175,7 +183,7 @@ const ClientPortal = () => {
                         />
                         <ServiceIcon
                             icon={<BarChart2 />}
-                            label="Histórico de Consumo"
+                            label="Histórico de Economia"
                             active={activeSection === 'history'}
                             onClick={() => setActiveSection('history')}
                         />
@@ -184,6 +192,7 @@ const ClientPortal = () => {
                             label="Atualização Cadastral"
                             active={activeSection === 'profile'}
                             onClick={() => setActiveSection('profile')}
+                            colSpanFull
                         />
                     </div>
                 </section>
@@ -205,7 +214,7 @@ const ClientPortal = () => {
                             <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100 h-full">
                                 <div className="flex justify-between items-center mb-8">
                                     <h3 className="text-xl font-black text-[#1e293b] tracking-tight flex items-center gap-2">
-                                        HISTÓRICO DE CONSUMO
+                                        HISTÓRICO DE ECONOMIA
                                     </h3>
                                     <button
                                         onClick={() => setActiveSection('history')}
@@ -223,7 +232,11 @@ const ClientPortal = () => {
                 )}
 
                 {activeSection === 'history' && (
-                    <HistorySection invoices={client.invoices} chartData={chartData} />
+                    <HistorySection
+                        invoices={invoices}
+                        chartData={chartData}
+                        totalAccumulatedSavings={totalAccumulatedSavings}
+                    />
                 )}
 
                 {activeSection === 'profile' && (
@@ -292,8 +305,8 @@ const ClientPortal = () => {
                                     onClick={() => copyToClipboard(pixData.pix_payload)}
                                     disabled={!pixData.pix_payload}
                                     className={`w-full py-5 rounded-2xl font-black transition-all duration-300 flex items-center justify-center gap-3 uppercase tracking-widest text-xs shadow-xl active:scale-95 mb-6 ${pixCopied
-                                            ? 'bg-green-600 text-white shadow-green-200'
-                                            : 'bg-[#1e293b] text-white hover:bg-black disabled:opacity-50'
+                                        ? 'bg-green-600 text-white shadow-green-200'
+                                        : 'bg-[#1e293b] text-white hover:bg-black disabled:opacity-50'
                                         }`}
                                 >
                                     {pixCopied ? (
@@ -311,15 +324,17 @@ const ClientPortal = () => {
     );
 };
 
-const ServiceIcon = ({ icon, label, active, onClick }) => (
+const ServiceIcon = ({ icon, label, active, onClick, colSpanFull }) => (
     <button
         onClick={onClick}
-        className={`flex flex-col items-center gap-3 p-4 rounded-3xl transition-all group min-w-[140px] ${active ? 'bg-yellow-500 shadow-xl shadow-yellow-100 scale-105' : 'bg-[#1e293b] hover:bg-black shadow-lg'}`}
+        className={`flex flex-col items-center justify-center gap-3 p-5 sm:p-4 rounded-3xl transition-all group w-full ${colSpanFull ? 'col-span-2 sm:col-span-1' : ''
+            } ${active ? 'bg-yellow-500 shadow-xl shadow-yellow-100 scale-[1.02]' : 'bg-[#1e293b] hover:bg-black shadow-lg'}`}
+        style={{ minHeight: '110px' }}
     >
         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${active ? 'bg-[#1e293b] text-yellow-500' : 'bg-white/10 text-white group-hover:bg-white/20'}`}>
-            {React.cloneElement(icon, { size: 24, strokeWidth: 2.5 })}
+            {React.cloneElement(icon, { size: 26, strokeWidth: 2.5 })}
         </div>
-        <span className={`text-[10px] font-black text-center uppercase tracking-wider leading-tight max-w-[100px] ${active ? 'text-[#1e293b]' : 'text-gray-300 group-hover:text-white'}`}>
+        <span className={`text-[10px] font-black text-center uppercase tracking-wider leading-tight ${active ? 'text-[#1e293b]' : 'text-gray-300 group-hover:text-white'}`}>
             {label}
         </span>
     </button>
@@ -403,7 +418,9 @@ const InvoiceCard = ({ latestInvoice, client, onGeneratePix, generatingPix }) =>
                     <button
                         onClick={() => {
                             if (latestInvoice.equatorial_invoice_path) {
-                                window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${latestInvoice.equatorial_invoice_path}`, '_blank');
+                                const path = latestInvoice.equatorial_invoice_path;
+                                const url = path.startsWith('http') ? path : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${path}`;
+                                window.open(url, '_blank');
                             } else {
                                 alert('Fatura PDF ainda não disponível para este mês.');
                             }
@@ -433,81 +450,153 @@ const ConsumptionChart = ({ data }) => (
                 axisLine={false}
                 tickLine={false}
                 tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 700 }}
+                tickFormatter={(value) => `R$ ${value}`}
             />
             <Tooltip
                 cursor={{ fill: '#F9FAFB' }}
                 contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', padding: '1rem' }}
                 itemStyle={{ fontWeight: 900, color: '#1e293b' }}
+                formatter={(value) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Economia']}
             />
             <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={40}>
                 {data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === data.length - 1 ? '#3b82f6' : '#EAB308'} />
+                    <Cell key={`cell-${index}`} fill={index === data.length - 1 ? '#10b981' : '#EAB308'} />
                 ))}
             </Bar>
         </BarChart>
     </ResponsiveContainer>
 );
 
-const HistorySection = ({ invoices, chartData }) => (
+const HistorySection = ({ invoices, chartData, totalAccumulatedSavings }) => (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <h2 className="text-2xl font-black text-[#1e293b] mb-8 border-l-4 border-yellow-500 pl-4">HISTÓRICO DE CONSUMO</h2>
+        <h2 className="text-2xl font-black text-[#1e293b] mb-8 border-l-4 border-yellow-500 pl-4">HISTÓRICO DE ECONOMIA</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 col-span-2">
-                <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">Consumo nos últimos 6 meses</h3>
-                <div className="h-[300px]">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-12">
+            <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-gray-100 col-span-1 md:col-span-2">
+                <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">Desconto Acumulado (R$) - Últimos 6 meses</h3>
+                <div className="h-[250px] md:h-[300px]">
                     <ConsumptionChart data={chartData} />
                 </div>
             </div>
-            <div className="bg-[#1e293b] p-8 rounded-3xl shadow-xl shadow-gray-200 text-white flex flex-col justify-center">
-                <h3 className="text-xs font-black text-yellow-500 uppercase tracking-widest mb-4">Consumo Médio</h3>
+            <div className="bg-[#1e293b] p-8 rounded-[2rem] shadow-xl shadow-gray-200 text-white flex flex-col justify-center">
+                <h3 className="text-xs font-black text-yellow-500 uppercase tracking-widest mb-4">Economia Total Acumulada</h3>
                 <p className="text-5xl font-black mb-2 tracking-tighter">
-                    {(chartData.reduce((acc, curr) => acc + curr.value, 0) / (chartData.length || 1)).toFixed(0)} <span className="text-xl">kWh</span>
+                    <span className="text-2xl mr-1">R$</span>
+                    {totalAccumulatedSavings.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
-                <p className="text-gray-400 font-bold opacity-80 uppercase text-[10px] tracking-wider">Período Selecionado</p>
+                <p className="text-gray-400 font-bold opacity-80 uppercase text-[10px] tracking-wider">Histórico Completo</p>
             </div>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Versão Desktop: Tabela */}
+        <div className="hidden md:block bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
             <table className="w-full text-left">
                 <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
                         <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">Mês</th>
                         <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">Consumo (kWh)</th>
-                        <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">V. Faturado</th>
+                        <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">Economia (R$)</th>
+                        <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">Valor Sem Desconto</th>
+                        <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">V. Fatura</th>
                         <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">Status</th>
                         <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] text-center">Fatura</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                    {invoices.map((inv) => (
-                        <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="p-6 font-black text-[#1e293b]">{inv.month}</td>
-                            <td className="p-6 font-bold text-gray-600">{inv.consumption_kwh.toFixed(0)} kWh</td>
-                            <td className="p-6 font-black text-yellow-600">R$ {inv.amount_to_collect.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-6">
-                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${inv.status_pago ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                    {inv.status_pago ? 'Pago' : 'Pendente'}
-                                </span>
-                            </td>
-                            <td className="p-6 text-center">
-                                <button
-                                    onClick={() => {
-                                        if (inv.equatorial_invoice_path) {
-                                            window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${inv.equatorial_invoice_path}`, '_blank');
-                                        } else {
-                                            alert('Fatura PDF ainda não disponível para este mês.');
-                                        }
-                                    }}
-                                    className="p-2 text-gray-400 hover:text-yellow-600 transition-colors"
-                                >
-                                    <Download size={20} />
-                                </button>
-                            </td>
-                        </tr>
-                    ))}
+                    {invoices.map((inv) => {
+                        const economy = (inv.value_without_discount || 0) - (inv.amount_to_collect || 0);
+                        return (
+                            <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
+                                <td className="p-6 font-black text-[#1e293b]">{inv.month}</td>
+                                <td className="p-6 font-bold text-gray-600">{inv.consumption_kwh.toFixed(0)} kWh</td>
+                                <td className="p-6 font-black text-green-600 bg-green-50/30">
+                                    R$ {economy.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="p-6 font-bold text-gray-400 line-through decoration-red-400/20">
+                                    R$ {(inv.value_without_discount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="p-6 font-black text-yellow-600">
+                                    R$ {(inv.amount_to_collect || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="p-6">
+                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${inv.status_pago ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                        {inv.status_pago ? 'Pago' : 'Pendente'}
+                                    </span>
+                                </td>
+                                <td className="p-6 text-center">
+                                    <button
+                                        onClick={() => {
+                                            if (inv.equatorial_invoice_path) {
+                                                const path = inv.equatorial_invoice_path;
+                                                const url = path.startsWith('http') ? path : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${path}`;
+                                                window.open(url, '_blank');
+                                            } else {
+                                                alert('Fatura PDF ainda não disponível para este mês.');
+                                            }
+                                        }}
+                                        className="p-2 text-gray-400 hover:text-yellow-600 transition-colors"
+                                    >
+                                        <Download size={20} />
+                                    </button>
+                                </td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
             </table>
+        </div>
+
+        {/* Versão Mobile: Cards */}
+        <div className="md:hidden space-y-4">
+            {invoices.map((inv) => {
+                const economy = (inv.value_without_discount || 0) - (inv.amount_to_collect || 0);
+                return (
+                    <div key={inv.id} className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+                        <div className="flex justify-between items-center mb-6">
+                            <span className="text-xl font-black text-[#1e293b] tracking-tight">{inv.month}</span>
+                            <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${inv.status_pago ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                {inv.status_pago ? 'Pago' : 'Pendente'}
+                            </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-y-6 gap-x-4 mb-8">
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Consumo</p>
+                                <p className="text-sm font-bold text-gray-700">{inv.consumption_kwh.toFixed(0)} kWh</p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Economia</p>
+                                <p className="text-sm font-black text-green-600">R$ {economy.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">V. Fatura</p>
+                                <p className="text-sm font-black text-yellow-600">R$ {(inv.amount_to_collect || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Sem Desconto</p>
+                                <p className="text-sm font-bold text-gray-400 line-through decoration-red-400/20">
+                                    R$ {(inv.value_without_discount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                if (inv.equatorial_invoice_path) {
+                                    const path = inv.equatorial_invoice_path;
+                                    const url = path.startsWith('http') ? path : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${path}`;
+                                    window.open(url, '_blank');
+                                } else {
+                                    alert('Fatura PDF ainda não disponível.');
+                                }
+                            }}
+                            className="w-full flex items-center justify-center gap-2 bg-gray-50 border-2 border-gray-100 text-[#1e293b] py-4 rounded-2xl font-black hover:bg-gray-100 transition uppercase tracking-widest text-[10px]"
+                        >
+                            <Download size={16} /> Baixar PDF
+                        </button>
+                    </div>
+                );
+            })}
         </div>
     </div>
 );
